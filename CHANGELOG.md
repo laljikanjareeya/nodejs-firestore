@@ -4,6 +4,13 @@
 
 [1]: https://www.npmjs.com/package/@google-cloud/firestore?activeTab=versions
 
+### [2.2.2](https://www.github.com/googleapis/nodejs-firestore/compare/v2.2.1...v2.2.2) (2019-06-20)
+
+
+### Bug Fixes
+
+* Support non-ISO-8859-1 Collection Names in Queries ([fc6f839](https://www.github.com/googleapis/nodejs-firestore/commit/fc6f839))
+
 ### [2.2.1](https://www.github.com/googleapis/nodejs-firestore/compare/v2.2.0...v2.2.1) (2019-06-14)
 
 
