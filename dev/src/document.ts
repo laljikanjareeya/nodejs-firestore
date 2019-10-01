@@ -388,8 +388,8 @@ export class DocumentSnapshot {
     const obj: DocumentData = {};
     for (const prop of Object.keys(fields)) {
       if (fields[prop] instanceof Array) {
-        obj[prop] = arrify(fields[prop] as QueryDocumentSnapshot[]).map(x => {
-          return x.data();
+        obj[prop] = arrify(fields[prop] as QueryDocumentSnapshot[]).map(doc => {
+          return doc.data();
         })
       } else if (fields[prop] instanceof QueryDocumentSnapshot) {
         obj[prop] = (fields[prop] as QueryDocumentSnapshot).data();
@@ -509,8 +509,7 @@ export class DocumentSnapshot {
   }
 
   setProperty(property: string, child: DocumentSnapshot | DocumentSnapshot[]) {
-    // tslint:disable-next-line: no-any
-    this._fieldsProto![property] = child as any;
+    this._fieldsProto![property] = child as google.firestore.v1.IValue;
   }
 }
 

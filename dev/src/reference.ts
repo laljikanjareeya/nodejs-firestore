@@ -1642,18 +1642,19 @@ export class Query {
     return this._get();
   }
 
-  async getChildDocs(
-    docs: QueryDocumentSnapshot[], childs: string[]
-  ): Promise<QueryDocumentSnapshot[]> {
-    const childDocsPath = this.getChildDocsPath(docs, childs);
-
-    const docRef: DocumentReference[] = childDocsPath.map(childDoc => {
-      return this.firestore.doc(childDoc.path);
+  async processChildDocs(
+    docs: QueryDocumentSnapshot[] | DocumentSnapshot[], allChilds: string[][]
+  ): Promise<void> {
+    const currentChilds = this.getCurrentChildNames(allChilds);
+    const childDocsPath = this.getChildDocsPath(docs, currentChilds);
+    const distinctDocsPath = [...new Set(childDocsPath.map(doc => doc.path))];
+    const docRef: DocumentReference[] = distinctDocsPath.map(path => {
+      return this.firestore.doc(path);
     });
     const childDocs = await this.firestore.getAll(...docRef);
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       try {
-        childs.forEach(child => {
+        currentChilds.forEach(child => {
           docs
             .filter(cs => cs.protoField(child))
             .map(doc => {
@@ -1666,14 +1667,18 @@ export class Query {
                   return docsPathToReplace.map(path => path.id).includes(childDoc.id);
                 });
               } else {
-               childToReplace = childDocs.find(x => {
-                  return x.id === docsPathToReplace[0].id;
+               childToReplace = childDocs.find(childDoc => {
+                  return childDoc.id === docsPathToReplace[0].id;
                 });
               }
               doc.setProperty(child, childToReplace!);
             });
         });
-        resolve(docs);
+        const remainingChild = this.getRemainingChildNames(allChilds);
+        if (remainingChild.length > 0) {
+          await this.processChildDocs(childDocs, remainingChild);
+        }
+        resolve();
       }
       catch (e) {
         reject(e);
@@ -1681,7 +1686,7 @@ export class Query {
     });
   }
 
-  getChildDocsPath(docs: QueryDocumentSnapshot[], child: string[]): ChildDocPath[] {
+  getChildDocsPath(docs: QueryDocumentSnapshot[] | DocumentSnapshot[], child: string[]): ChildDocPath[] {
     let childDocsPath: ChildDocPath[] = [];
     child.forEach(childEntity => {
       const keyValue = docs
@@ -1710,6 +1715,20 @@ export class Query {
     return childDocsPath;
   }
 
+  getCurrentChildNames(childs: string[][]) {
+    let currentChild= childs.map(xs => {
+      return xs[0];
+    }).filter(x => x.length > 0);
+    currentChild = [...new Set(currentChild)];
+    return currentChild;
+  }
+
+  getRemainingChildNames(childs: string[][]) {
+    return childs.filter(xs => {
+      xs.shift();
+      return xs.length > 0;
+    });
+  }
   /**
    * Internal get() method that accepts an optional transaction id.
    *
@@ -1737,18 +1756,19 @@ export class Query {
         })
         .on('end', () => {
           if (this._child && this._child.length > 0) {
-            this.getChildDocs(docs, this._child).then(newDocs => {
+            const allChild = this._child.map(x => x.split('.'))
+            this.processChildDocs(docs, allChild).then(() => {
               resolve(
                 new QuerySnapshot(
                   this,
                   readTime,
-                  newDocs.length,
-                  () => newDocs,
+                  docs.length,
+                  () => docs,
                   () => {
                     const changes: DocumentChange[] = [];
-                    for (let i = 0; i < newDocs.length; ++i) {
+                    for (let i = 0; i < docs.length; ++i) {
                       changes.push(
-                        new DocumentChange('added', newDocs[i], -1, i)
+                        new DocumentChange('added', docs[i], -1, i)
                       );
                     }
                     return changes;
