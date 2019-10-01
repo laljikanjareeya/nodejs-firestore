@@ -15,7 +15,7 @@
  */
 
 const deepEqual = require('deep-equal');
-
+import arrify = require('arrify');
 import * as bun from 'bun';
 import * as through2 from 'through2';
 
@@ -60,6 +60,13 @@ import {validateDocumentData, WriteBatch, WriteResult} from './write-batch';
 
 import api = proto.google.firestore.v1;
 
+export interface ChildDocPath {
+  id: string;
+  parentId: string;
+  childEntity: string;
+  path: string;
+  type: string;
+}
 /**
  * The direction of a `Query.orderBy()` clause is specified as 'desc' or 'asc'
  * (descending or ascending).
@@ -994,7 +1001,7 @@ export class QueryOptions {
  */
 export class Query {
   private readonly _serializer: Serializer;
-
+  protected _child?: string[]
   /**
    * @hideconstructor
    *
@@ -1635,6 +1642,74 @@ export class Query {
     return this._get();
   }
 
+  async getChildDocs(
+    docs: QueryDocumentSnapshot[], childs: string[]
+  ): Promise<QueryDocumentSnapshot[]> {
+    const childDocsPath = this.getChildDocsPath(docs, childs);
+
+    const docRef: DocumentReference[] = childDocsPath.map(childDoc => {
+      return this.firestore.doc(childDoc.path);
+    });
+    const childDocs = await this.firestore.getAll(...docRef);
+    return new Promise((resolve, reject) => {
+      try {
+        childs.forEach(child => {
+          docs
+            .filter(cs => cs.protoField(child))
+            .map(doc => {
+              const docsPathToReplace = childDocsPath.filter(docPath => {
+                return docPath.parentId === doc.id && docPath.childEntity === child;
+              });
+              let childToReplace: DocumentSnapshot | DocumentSnapshot[] | undefined;
+              if (docsPathToReplace[0]!.type === 'arrayValue') {
+                childToReplace = childDocs.filter(childDoc => {
+                  return docsPathToReplace.map(path => path.id).includes(childDoc.id);
+                });
+              } else {
+               childToReplace = childDocs.find(x => {
+                  return x.id === docsPathToReplace[0].id;
+                });
+              }
+              doc.setProperty(child, childToReplace!);
+            });
+        });
+        resolve(docs);
+      }
+      catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  getChildDocsPath(docs: QueryDocumentSnapshot[], child: string[]): ChildDocPath[] {
+    let childDocsPath: ChildDocPath[] = [];
+    child.forEach(childEntity => {
+      const keyValue = docs
+        .filter(cs => cs.protoField(childEntity))
+        .map(doc => {
+          // tslint:disable-next-line: no-any
+          const field = doc.protoField(childEntity) as any;
+          let ref = field;
+          if (field.valueType === 'arrayValue') {
+            ref = field.arrayValue.values;
+          }
+          // tslint:disable-next-line: no-any
+          return (arrify(ref)).map((xs: any) => {
+            const qualifiedResourcePath = QualifiedResourcePath.fromSlashSeparatedString(xs.referenceValue);
+            return {
+              path: qualifiedResourcePath.relativeName,
+              parentId: doc.id,
+              childEntity,
+              type: field.valueType,
+              id: qualifiedResourcePath.id
+            }
+          });
+        });
+      childDocsPath = childDocsPath.concat(...keyValue);
+    });
+    return childDocsPath;
+  }
+
   /**
    * Internal get() method that accepts an optional transaction id.
    *
@@ -1661,21 +1736,43 @@ export class Query {
           }
         })
         .on('end', () => {
-          resolve(
-            new QuerySnapshot(
-              this,
-              readTime,
-              docs.length,
-              () => docs,
-              () => {
-                const changes: DocumentChange[] = [];
-                for (let i = 0; i < docs.length; ++i) {
-                  changes.push(new DocumentChange('added', docs[i], -1, i));
+          if (this._child && this._child.length > 0) {
+            this.getChildDocs(docs, this._child).then(newDocs => {
+              resolve(
+                new QuerySnapshot(
+                  this,
+                  readTime,
+                  newDocs.length,
+                  () => newDocs,
+                  () => {
+                    const changes: DocumentChange[] = [];
+                    for (let i = 0; i < newDocs.length; ++i) {
+                      changes.push(
+                        new DocumentChange('added', newDocs[i], -1, i)
+                      );
+                    }
+                    return changes;
+                  }
+                )
+              );
+            });
+          } else {
+            resolve(
+              new QuerySnapshot(
+                this,
+                readTime,
+                docs.length,
+                () => docs,
+                () => {
+                  const changes: DocumentChange[] = [];
+                  for (let i = 0; i < docs.length; ++i) {
+                    changes.push(new DocumentChange('added', docs[i], -1, i));
+                  }
+                  return changes;
                 }
-                return changes;
-              }
-            )
-          );
+              )
+            );
+          }
         });
     });
   }
@@ -2142,6 +2239,11 @@ export class CollectionReference extends Query {
       this === other ||
       (other instanceof CollectionReference && super.isEqual(other))
     );
+  }
+
+  include(child: string[]) {
+    this._child = child;
+    return this;
   }
 }
 

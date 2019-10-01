@@ -1156,6 +1156,8 @@ declare namespace FirebaseFirestore {
      * @return true if this `CollectionReference` is equal to the provided one.
      */
     isEqual(other: CollectionReference): boolean;
+
+    include(child: string[]): CollectionReference;
   }
 
   /**

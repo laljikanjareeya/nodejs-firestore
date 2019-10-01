@@ -28,6 +28,7 @@ import {ApiMapValue, DocumentData, UpdateMap} from './types';
 import {isEmpty, isObject} from './util';
 
 import api = google.firestore.v1;
+import arrify = require('arrify');
 
 /**
  * Returns a builder for DocumentSnapshot and QueryDocumentSnapshot instances.
@@ -377,8 +378,7 @@ export class DocumentSnapshot {
   // We deliberately use `any` in the external API to not impose type-checking
   // on end users.
   // tslint:disable-next-line no-any
-  data(): {[field: string]: any} | undefined {
-    // tslint:disable-line no-any
+  data(): { [field: string]: any } | undefined {
     const fields = this._fieldsProto;
 
     if (fields === undefined) {
@@ -387,7 +387,15 @@ export class DocumentSnapshot {
 
     const obj: DocumentData = {};
     for (const prop of Object.keys(fields)) {
-      obj[prop] = this._serializer.decodeValue(fields[prop]);
+      if (fields[prop] instanceof Array) {
+        obj[prop] = arrify(fields[prop] as QueryDocumentSnapshot[]).map(x => {
+          return x.data();
+        })
+      } else if (fields[prop] instanceof QueryDocumentSnapshot) {
+        obj[prop] = (fields[prop] as QueryDocumentSnapshot).data();
+      } else {
+        obj[prop] = this._serializer.decodeValue(fields[prop]);
+      }
     }
     return obj;
   }
@@ -498,6 +506,11 @@ export class DocumentSnapshot {
         this._ref.isEqual(other._ref) &&
         deepEqual(this._fieldsProto, other._fieldsProto, {strict: true}))
     );
+  }
+
+  setProperty(property: string, child: DocumentSnapshot | DocumentSnapshot[]) {
+    // tslint:disable-next-line: no-any
+    this._fieldsProto![property] = child as any;
   }
 }
 
