@@ -35,7 +35,12 @@ import {
   validateResourcePath,
 } from './path';
 import {ClientPool} from './pool';
-import {ChildDocPath, CollectionReference, Query, QueryOptions} from './reference';
+import {
+  ChildDocPath,
+  CollectionReference,
+  Query,
+  QueryOptions,
+} from './reference';
 import {DocumentReference} from './reference';
 import {Serializer} from './serializer';
 import {Timestamp} from './timestamp';
@@ -1532,11 +1537,15 @@ export class Firestore {
   }
 
   async processChildDocs(
-    docs: QueryDocumentSnapshot[] | DocumentSnapshot[], allChilds: string[][]
+    docs: QueryDocumentSnapshot[] | DocumentSnapshot[],
+    allChilds: string[][]
   ): Promise<void> {
     const currentChilds = this.getCurrentChildNames(allChilds);
     const childDocsPath = this.getChildDocsPath(docs, currentChilds);
     const distinctDocsPath = [...new Set(childDocsPath.map(doc => doc.path))];
+    if (distinctDocsPath.length === 0) {
+      return;
+    }
     const docRef: DocumentReference[] = distinctDocsPath.map(path => {
       return this.doc(path);
     });
@@ -1548,15 +1557,22 @@ export class Firestore {
             .filter(cs => cs.protoField(child))
             .map(doc => {
               const docsPathToReplace = childDocsPath.filter(docPath => {
-                return docPath.parentId === doc.id && docPath.childEntity === child;
+                return (
+                  docPath.parentId === doc.id && docPath.childEntity === child
+                );
               });
-              let childToReplace: DocumentSnapshot | DocumentSnapshot[] | undefined;
+              let childToReplace:
+                | DocumentSnapshot
+                | DocumentSnapshot[]
+                | undefined;
               if (docsPathToReplace[0]!.type === 'arrayValue') {
                 childToReplace = childDocs.filter(childDoc => {
-                  return docsPathToReplace.map(path => path.id).includes(childDoc.id);
+                  return docsPathToReplace
+                    .map(path => path.id)
+                    .includes(childDoc.id);
                 });
               } else {
-               childToReplace = childDocs.find(childDoc => {
+                childToReplace = childDocs.find(childDoc => {
                   return childDoc.id === docsPathToReplace[0].id;
                 });
               }
@@ -1568,14 +1584,16 @@ export class Firestore {
           await this.processChildDocs(childDocs, remainingChild);
         }
         resolve();
-      }
-      catch (e) {
+      } catch (e) {
         reject(e);
       }
     });
   }
 
-  getChildDocsPath(docs: QueryDocumentSnapshot[] | DocumentSnapshot[], child: string[]): ChildDocPath[] {
+  getChildDocsPath(
+    docs: QueryDocumentSnapshot[] | DocumentSnapshot[],
+    child: string[]
+  ): ChildDocPath[] {
     let childDocsPath: ChildDocPath[] = [];
     child.forEach(childEntity => {
       const keyValue = docs
@@ -1588,15 +1606,17 @@ export class Firestore {
             ref = field.arrayValue.values;
           }
           // tslint:disable-next-line: no-any
-          return (arrify(ref)).map((xs: any) => {
-            const qualifiedResourcePath = QualifiedResourcePath.fromSlashSeparatedString(xs.referenceValue);
+          return arrify(ref).map((xs: any) => {
+            const qualifiedResourcePath = QualifiedResourcePath.fromSlashSeparatedString(
+              xs.referenceValue
+            );
             return {
               path: qualifiedResourcePath.relativeName,
               parentId: doc.id,
               childEntity,
               type: field.valueType,
-              id: qualifiedResourcePath.id
-            }
+              id: qualifiedResourcePath.id,
+            };
           });
         });
       childDocsPath = childDocsPath.concat(...keyValue);
@@ -1605,9 +1625,11 @@ export class Firestore {
   }
 
   getCurrentChildNames(childs: string[][]) {
-    let currentChild= childs.map(xs => {
-      return xs[0];
-    }).filter(x => x.length > 0);
+    let currentChild = childs
+      .map(xs => {
+        return xs[0];
+      })
+      .filter(x => x.length > 0);
     currentChild = [...new Set(currentChild)];
     return currentChild;
   }

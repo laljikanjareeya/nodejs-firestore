@@ -378,7 +378,7 @@ export class DocumentSnapshot {
   // We deliberately use `any` in the external API to not impose type-checking
   // on end users.
   // tslint:disable-next-line no-any
-  data(): { [field: string]: any } | undefined {
+  data(): {[field: string]: any} | undefined {
     const fields = this._fieldsProto;
 
     if (fields === undefined) {
@@ -390,7 +390,7 @@ export class DocumentSnapshot {
       if (fields[prop] instanceof Array) {
         obj[prop] = arrify(fields[prop] as QueryDocumentSnapshot[]).map(doc => {
           return doc.data();
-        })
+        });
       } else if (fields[prop] instanceof QueryDocumentSnapshot) {
         obj[prop] = (fields[prop] as QueryDocumentSnapshot).data();
       } else {

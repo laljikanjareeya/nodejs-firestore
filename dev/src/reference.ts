@@ -127,6 +127,7 @@ const comparisonOperators: {
  * @class
  */
 export class DocumentReference implements Serializable {
+  _child: string[] = [];
   /**
    * @hideconstructor
    *
@@ -243,7 +244,21 @@ export class DocumentReference implements Serializable {
    * });
    */
   get(): Promise<DocumentSnapshot> {
-    return this._firestore.getAll(this).then(([result]) => result);
+    return this._firestore.getAll(this).then(([result]) => {
+      if (this._child.length > 0) {
+        const allChild = this._child.map(x => x.split('.'));
+        return new Promise((resolve, reject) => {
+          this.firestore
+            .processChildDocs(arrify(result), allChild)
+            .then(() => {
+              resolve(result);
+            })
+            .catch(e => reject(e));
+        });
+      } else {
+        return result;
+      }
+    });
   }
 
   /**
@@ -516,6 +531,11 @@ export class DocumentReference implements Serializable {
    */
   toProto(): api.IValue {
     return {referenceValue: this.formattedName};
+  }
+
+  include(child: string[]): DocumentReference {
+    this._child = child;
+    return this;
   }
 }
 
@@ -1001,7 +1021,7 @@ export class QueryOptions {
  */
 export class Query {
   private readonly _serializer: Serializer;
-  protected _child?: string[]
+  protected _child?: string[];
   /**
    * @hideconstructor
    *
@@ -1642,7 +1662,6 @@ export class Query {
     return this._get();
   }
 
-
   /**
    * Internal get() method that accepts an optional transaction id.
    *
@@ -1670,7 +1689,7 @@ export class Query {
         })
         .on('end', () => {
           if (this._child && this._child.length > 0) {
-            const allChild = this._child.map(x => x.split('.'))
+            const allChild = this._child.map(x => x.split('.'));
             this._firestore.processChildDocs(docs, allChild).then(() => {
               resolve(
                 new QuerySnapshot(
@@ -1681,9 +1700,7 @@ export class Query {
                   () => {
                     const changes: DocumentChange[] = [];
                     for (let i = 0; i < docs.length; ++i) {
-                      changes.push(
-                        new DocumentChange('added', docs[i], -1, i)
-                      );
+                      changes.push(new DocumentChange('added', docs[i], -1, i));
                     }
                     return changes;
                   }

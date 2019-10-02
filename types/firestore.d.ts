@@ -667,6 +667,8 @@ declare namespace FirebaseFirestore {
      * @return true if this `DocumentReference` is equal to the provided one.
      */
     isEqual(other: DocumentReference): boolean;
+
+    include(child: string[]): DocumentReference;
   }
 
   /**
