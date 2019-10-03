@@ -19,10 +19,12 @@ import {expect} from 'chai';
 import * as proto from '../protos/firestore_proto_api';
 import {
   DocumentReference,
+  DocumentSnapshot,
   FieldPath,
   FieldValue,
   Firestore,
   GeoPoint,
+  QueryDocumentSnapshot,
   setLogFunction,
   Timestamp,
 } from '../src';
@@ -46,6 +48,7 @@ import {
   writeResult,
 } from './util/helpers';
 
+import arrify = require('arrify');
 import api = proto.google.firestore.v1;
 
 const PROJECT_ID = 'test-project';
@@ -2019,6 +2022,172 @@ describe('listCollections() method', () => {
           expect(collections[0].path).to.equal('coll/doc/first');
           expect(collections[1].path).to.equal('coll/doc/second');
         });
+    });
+  });
+});
+
+describe('eager loading', () => {
+  let firestore: Firestore;
+  beforeEach(() => {
+    return createInstance().then(firestoreClient => {
+      firestore = firestoreClient;
+    });
+  });
+
+  afterEach(() => verifyInstance(firestore));
+  it('returns document with child', () => {
+    const childOverrides: ApiOverride = {
+      batchGetDocuments: () => {
+        return stream(
+          found(
+            document('childDocumentId', 'foo1', 'foobar1')
+          )
+        );
+      },
+    };
+    const overrides: ApiOverride = {
+      batchGetDocuments: request => {
+        requestEquals(request, retrieve('documentId'));
+        return stream(
+          found(
+            document('documentId', 'foo', {
+              mapValue: {
+                fields: {
+                  bar: {
+                    stringValue: 'foobar',
+                  }
+                },
+              },
+            }, 'child', {
+              referenceValue: `projects/${PROJECT_ID}/databases/(default)/documents/collectionId/childDocumentId`,
+              valueType: 'referenceValue'
+            } as {} as api.IValue,
+            )));
+      }
+    };
+    createInstance(overrides).then(firestore => {
+      firestore.processChildDocs = (docs: QueryDocumentSnapshot[] | DocumentSnapshot[]) => {
+        return new Promise((resolve, rejects) => {
+          docs.forEach(async doc => {
+            const childInstance = await createInstance(childOverrides);
+            const childDoc = await childInstance.doc('collectionId/childDocumentId').get();
+            doc.setProperty('child', childDoc);
+            resolve()
+          });
+        });
+      }
+      firestore
+        .doc('collectionId/documentId').include(['child'])
+        .get()
+        .then(result => {
+          expect(result.data()).to.deep.eq({ foo: { bar: 'foobar' }, child: { foo1: 'foobar1' } });
+          expect(result.ref.id).to.equal('documentId');
+        });
+    });
+  });
+
+  it('process document with child docs', () => {
+    const childOverrides: ApiOverride = {
+      batchGetDocuments: () => {
+        return stream(
+          found(
+            document('childDocumentId', 'foo1', 'foobar1')
+          )
+        );
+      },
+    };
+    const childOverrides1: ApiOverride = {
+      batchGetDocuments: () => {
+        return stream(
+          found(
+            document('childDocumentId2', 'foo2', 'foobar2')
+          )
+        );
+      },
+    };
+    const overrides: ApiOverride = {
+      batchGetDocuments: request => {
+        requestEquals(request, retrieve('documentId'));
+        return stream(
+          found(
+            document('documentId', 'foo', {
+              mapValue: {
+                fields: {
+                  bar: {
+                    stringValue: 'foobar',
+                  }
+                },
+              },
+            }, 'child', {
+              referenceValue: `projects/${PROJECT_ID}/databases/(default)/documents/collectionId/childDocumentId`,
+              valueType: 'referenceValue'
+            } as {} as api.IValue,
+            )));
+      }
+    };
+    createInstance(overrides).then(firestore => {
+      firestore.processChildDocs = (docs: QueryDocumentSnapshot[] | DocumentSnapshot[]) => {
+        return new Promise((resolve, rejects) => {
+          docs.forEach(async doc => {
+            const child1Instance = await createInstance(childOverrides);
+            const child2Instance = await createInstance(childOverrides1);
+            const child1Doc = await child1Instance.doc('collectionId/childDocumentId').get();
+            const child2Doc = await child2Instance.doc('collectionId/childDocumentId2').get();
+            doc.setProperty('childs', [child1Doc, child2Doc]);
+            resolve();
+          });
+        })
+      }
+      firestore
+        .doc('collectionId/documentId').include(['childs'])
+        .get()
+        .then(result => {
+          expect(result.data()).to.deep.eq({ foo: { bar: 'foobar' }, child: [{ foo1: 'foobar1' }, { foo2: 'foobar2' }] });
+          expect(result.ref.id).to.equal('documentId');
+        });
+    });
+  });
+
+  it('should process current and remainging child', () => {
+    const childs = ['project', 'department', 'subjects', 'project.language', 'subjects.hod'];
+    const childsArray = childs.map(child => child.split('.'));
+    const currentChild = firestore.getCurrentChildNames(childsArray);
+    const remainingChild = firestore.getRemainingChildNames(childsArray);
+    expect(currentChild).to.deep.equal(['project', 'department', 'subjects'])
+    expect(remainingChild).to.deep.equal([['language'], ['hod']])
+  });
+
+  it('get child doc path', () => {
+    const overrides: ApiOverride = {
+      batchGetDocuments: request => {
+        requestEquals(request, retrieve('documentId'));
+        return stream(
+          found(
+            document('documentId', 'foo', {
+              mapValue: {
+                fields: {
+                  bar: {
+                    stringValue: 'foobar',
+                  }
+                },
+              },
+            }, 'child', {
+              referenceValue: `projects/${PROJECT_ID}/databases/(default)/documents/collectionId/childDocumentId`,
+              valueType: 'referenceValue'
+            } as {} as api.IValue,
+            )));
+      }
+    };
+    createInstance(overrides).then(async firestore => {
+      const doc = await firestore.doc('collectionId/documentId').get();
+      const childDocPath = firestore.getChildDocsPath(arrify(doc), ['child']);
+      expect(childDocPath).to.deep.equal([{
+        childEntity: "child",
+        id: "childDocumentId",
+        parentId: "documentId",
+        path: "collectionId/childDocumentId",
+        type: "referenceValue"
+      }])
     });
   });
 });

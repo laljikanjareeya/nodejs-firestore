@@ -1582,8 +1582,9 @@ export class Firestore {
         const remainingChild = this.getRemainingChildNames(allChilds);
         if (remainingChild.length > 0) {
           await this.processChildDocs(childDocs, remainingChild);
+        } else {
+          resolve();
         }
-        resolve();
       } catch (e) {
         reject(e);
       }
