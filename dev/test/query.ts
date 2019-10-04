@@ -26,6 +26,7 @@ import {
   ApiOverride,
   createInstance,
   document,
+  found,
   InvalidApiUsage,
   stream,
   verifyInstance,
@@ -280,8 +281,16 @@ function queryEquals(
   expect(actual).to.deep.eq(query);
 }
 
-export function result(documentId: string): api.IRunQueryResponse {
-  return {document: document(documentId), readTime: {seconds: 5, nanos: 6}};
+export function result(
+  documentId: string,
+  field?: string,
+  value?: string | api.IValue,
+  ...fieldOrValues: Array<string | api.IValue>
+): api.IRunQueryResponse {
+  return {
+    document: document(documentId, field, value, ...fieldOrValues),
+    readTime: {seconds: 5, nanos: 6},
+  };
 }
 
 describe('query interface', () => {
@@ -1882,6 +1891,38 @@ describe('collectionGroup queries', () => {
           "valid document path, but 'coll' is not because it contains an odd " +
           'number of segments.'
       );
+    });
+  });
+});
+
+describe('include() interface', () => {
+  it('retrun collection docs with child', () => {
+    const overrides: ApiOverride = {
+      runQuery: request => {
+        return stream(
+          result('first', 'foo', 'foobar', 'child', ({
+            referenceValue: `projects/${PROJECT_ID}/databases/(default)/documents/collectionId/second`,
+            valueType: 'referenceValue',
+          } as {}) as api.IValue)
+        );
+      },
+      batchGetDocuments: request => {
+        return stream(found(document('second', 'foo1', 'foobar1')));
+      },
+    };
+
+    return createInstance(overrides).then(firestore => {
+      const query = firestore.collection('collectionId').include(['child']);
+      return query
+        .get()
+        .then(results => {
+          expect(results.docs[0].data()).to.deep.equal({
+            foo: 'foobar',
+            child: {foo1: 'foobar1'},
+          });
+          expect(results.docs[0].id).to.equal('first');
+        })
+        .catch(console.error);
     });
   });
 });

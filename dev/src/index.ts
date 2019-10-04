@@ -1550,45 +1550,34 @@ export class Firestore {
       return this.doc(path);
     });
     const childDocs = await this.getAll(...docRef);
-    return new Promise(async (resolve, reject) => {
-      try {
-        currentChilds.forEach(child => {
-          docs
-            .filter(cs => cs.protoField(child))
-            .map(doc => {
-              const docsPathToReplace = childDocsPath.filter(docPath => {
-                return (
-                  docPath.parentId === doc.id && docPath.childEntity === child
-                );
-              });
-              let childToReplace:
-                | DocumentSnapshot
-                | DocumentSnapshot[]
-                | undefined;
-              if (docsPathToReplace[0]!.type === 'arrayValue') {
-                childToReplace = childDocs.filter(childDoc => {
-                  return docsPathToReplace
-                    .map(path => path.id)
-                    .includes(childDoc.id);
-                });
-              } else {
-                childToReplace = childDocs.find(childDoc => {
-                  return childDoc.id === docsPathToReplace[0].id;
-                });
-              }
-              doc.setProperty(child, childToReplace!);
+    currentChilds.forEach(child => {
+      docs
+        .filter(cs => cs.protoField(child))
+        .map(doc => {
+          const docsPathToReplace = childDocsPath.filter(docPath => {
+            return docPath.parentId === doc.id && docPath.childEntity === child;
+          });
+          let childToReplace: DocumentSnapshot | DocumentSnapshot[] | undefined;
+          if (docsPathToReplace[0]!.type === 'arrayValue') {
+            childToReplace = childDocs.filter(childDoc => {
+              return docsPathToReplace
+                .map(path => path.id)
+                .includes(childDoc.id);
             });
+          } else {
+            childToReplace = childDocs.find(childDoc => {
+              return childDoc.id === docsPathToReplace[0].id;
+            });
+          }
+          doc.setProperty(child, childToReplace!);
         });
-        const remainingChild = this.getRemainingChildNames(allChilds);
-        if (remainingChild.length > 0) {
-          await this.processChildDocs(childDocs, remainingChild);
-        } else {
-          resolve();
-        }
-      } catch (e) {
-        reject(e);
-      }
     });
+    const remainingChild = this.getRemainingChildNames(allChilds);
+    if (remainingChild.length > 0) {
+      return this.processChildDocs(childDocs, remainingChild);
+    } else {
+      return new Promise((resolve, reject) => resolve());
+    }
   }
 
   getChildDocsPath(

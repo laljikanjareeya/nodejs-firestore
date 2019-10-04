@@ -244,17 +244,11 @@ export class DocumentReference implements Serializable {
    * });
    */
   get(): Promise<DocumentSnapshot> {
-    return this._firestore.getAll(this).then(([result]) => {
+    return this._firestore.getAll(this).then(async ([result]) => {
       if (this._child.length > 0) {
         const allChild = this._child.map(x => x.split('.'));
-        return new Promise((resolve, reject) => {
-          this.firestore
-            .processChildDocs(arrify(result), allChild)
-            .then(() => {
-              resolve(result);
-            })
-            .catch(e => reject(e));
-        });
+        await this._firestore.processChildDocs(arrify(result), allChild);
+        return result;
       } else {
         return result;
       }
@@ -1687,43 +1681,26 @@ export class Query {
             docs.push(document);
           }
         })
-        .on('end', () => {
+        .on('end', async () => {
           if (this._child && this._child.length > 0) {
             const allChild = this._child.map(x => x.split('.'));
-            this._firestore.processChildDocs(docs, allChild).then(() => {
-              resolve(
-                new QuerySnapshot(
-                  this,
-                  readTime,
-                  docs.length,
-                  () => docs,
-                  () => {
-                    const changes: DocumentChange[] = [];
-                    for (let i = 0; i < docs.length; ++i) {
-                      changes.push(new DocumentChange('added', docs[i], -1, i));
-                    }
-                    return changes;
-                  }
-                )
-              );
-            });
-          } else {
-            resolve(
-              new QuerySnapshot(
-                this,
-                readTime,
-                docs.length,
-                () => docs,
-                () => {
-                  const changes: DocumentChange[] = [];
-                  for (let i = 0; i < docs.length; ++i) {
-                    changes.push(new DocumentChange('added', docs[i], -1, i));
-                  }
-                  return changes;
-                }
-              )
-            );
+            await this._firestore.processChildDocs(docs, allChild);
           }
+          resolve(
+            new QuerySnapshot(
+              this,
+              readTime,
+              docs.length,
+              () => docs,
+              () => {
+                const changes: DocumentChange[] = [];
+                for (let i = 0; i < docs.length; ++i) {
+                  changes.push(new DocumentChange('added', docs[i], -1, i));
+                }
+                return changes;
+              }
+            )
+          );
         });
     });
   }
