@@ -507,7 +507,13 @@ export class DocumentSnapshot {
         deepEqual(this._fieldsProto, other._fieldsProto, {strict: true}))
     );
   }
-
+  /**
+   * Set Property to document object
+   *
+   * @private
+   * @param property string property (e.g. 'foo' or 'bar').
+   * @param child document object.
+   */
   setProperty(property: string, child: DocumentSnapshot | DocumentSnapshot[]) {
     this._fieldsProto![property] = child as google.firestore.v1.IValue;
   }

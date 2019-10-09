@@ -1536,6 +1536,15 @@ export class Firestore {
     return result.promise;
   }
 
+  /**
+   * Process the reference document(s) with given references.
+   * will retrive the reference docs and assign to original object.
+   *
+   * @private
+   * @param docs List of Document to Process the childs
+   * @param allChilds List of reference Names.
+   * @returns A Promise.
+   */
   async processChildDocs(
     docs: QueryDocumentSnapshot[] | DocumentSnapshot[],
     allChilds: string[][]
@@ -1580,6 +1589,15 @@ export class Firestore {
     }
   }
 
+  /**
+   * Retrive reference document(s) Path.
+   * will retruns list of document path.
+   *
+   * @private
+   * @param docs List of Document to Process the childs
+   * @param child List of current reference Names.
+   * @returns list of document path.
+   */
   getChildDocsPath(
     docs: QueryDocumentSnapshot[] | DocumentSnapshot[],
     child: string[]
@@ -1614,6 +1632,14 @@ export class Firestore {
     return childDocsPath;
   }
 
+  /**
+   * Retrives all current reference names.
+   * will retruns list of current references.
+   *
+   * @private
+   * @param childs List of Document to Process the childs
+   * @returns list of current references.
+   */
   getCurrentChildNames(childs: string[][]) {
     let currentChild = childs
       .map(xs => {
@@ -1624,6 +1650,14 @@ export class Firestore {
     return currentChild;
   }
 
+  /**
+   * Retrives remaining Reference names.
+   * will retruns list of remaining references.
+   *
+   * @private
+   * @param childs List of Document to Process the childs
+   * @returns list of remaining reference.
+   */
   getRemainingChildNames(childs: string[][]) {
     return childs.filter(xs => {
       xs.shift();

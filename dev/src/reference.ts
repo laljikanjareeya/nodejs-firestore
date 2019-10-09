@@ -127,7 +127,7 @@ const comparisonOperators: {
  * @class
  */
 export class DocumentReference implements Serializable {
-  _child: string[] = [];
+  protected _child: string[] = [];
   /**
    * @hideconstructor
    *

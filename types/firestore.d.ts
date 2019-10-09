@@ -668,6 +668,12 @@ declare namespace FirebaseFirestore {
      */
     isEqual(other: DocumentReference): boolean;
 
+    /**
+     * includes list of child document while retriving document data
+     *
+     * @param child The elements to include into the document.
+     * @return `DocumentReference`
+     */
     include(child: string[]): DocumentReference;
   }
 
@@ -1159,6 +1165,12 @@ declare namespace FirebaseFirestore {
      */
     isEqual(other: CollectionReference): boolean;
 
+    /**
+     * includes list of child document while retriving collection data
+     *
+     * @param child The elements to include into the collection.
+     * @return `CollectionReference`
+     */
     include(child: string[]): CollectionReference;
   }
 
