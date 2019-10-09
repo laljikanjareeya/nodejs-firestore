@@ -2030,3 +2030,74 @@ describe('QuerySnapshot class', () => {
     });
   });
 });
+
+describe('eager loading', () => {
+  let firestore: Firestore;
+  let randomCol: CollectionReference;
+  beforeEach(() => {
+    firestore = new Firestore({});
+    randomCol = getTestRoot(firestore);
+  });
+
+  afterEach(() => {
+    randomCol
+      .get()
+      .then(querySnapshot => {
+        const batch = firestore.batch();
+        querySnapshot.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        return batch.commit();
+      })
+      .then(() => {
+        verifyInstance(firestore);
+      });
+  });
+
+  it('return docs with child/child to child', async () => {
+    const ref1 = randomCol.doc('doc1');
+    const ref2 = randomCol.doc('doc2');
+    const ref3 = randomCol.doc('doc3');
+    const ref4 = randomCol.doc('doc4');
+    const ref5 = randomCol.doc('doc5');
+    const batch = firestore.batch();
+
+    batch.set(ref5, {foo5: 'bar5'});
+    batch.set(ref1, {
+      foo1: 'bar1',
+      childToChild: ref5,
+    });
+    batch.set(ref2, {foo2: 'bar2'});
+    batch.set(ref3, {foo3: 'bar3'});
+    await batch.commit();
+    await ref4.set({
+      foo4: 'bar4',
+      child: ref1,
+      childs: [ref2, ref3],
+    });
+
+    return ref4
+      .include(['child', 'childs', 'child.childToChild'])
+      .get()
+      .then(result => {
+        const expectedResult = {
+          foo4: 'bar4',
+          child: {
+            foo1: 'bar1',
+            childToChild: {
+              foo5: 'bar5',
+            },
+          },
+          childs: [
+            {
+              foo2: 'bar2',
+            },
+            {
+              foo3: 'bar3',
+            },
+          ],
+        };
+        expect(result.data()).to.deep.equal(expectedResult);
+      });
+  });
+});
