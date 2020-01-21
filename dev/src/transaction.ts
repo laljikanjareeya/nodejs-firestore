@@ -451,8 +451,12 @@ export class Transaction {
         await this.commit();
         return result; // Success
       } catch (err) {
-        lastError = err;
-        this._writeBatch._reset();
+        if (err.code === Status.ALREADY_EXISTS) {
+          return Promise.reject(err);
+        } else {
+          lastError = err;
+          this._writeBatch._reset();
+        }
       }
     }
 
